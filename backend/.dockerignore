@@ -1,0 +1,26 @@
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python bytecode cache folders
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local environment config overrides
+.env
+*.secrets
+
+# Database data folders if accidentally stored locally
+data/
+mongo-data/
+
+# IDE files and OS garbage
+.git/
+.gitignore
+.cursor/
+.vscode/
+.DS_Store
+Thumbs.db

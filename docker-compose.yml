@@ -1,0 +1,31 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: cost-estimator-db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  backend:
+    build: ./backend
+    container_name: cost-estimator-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - mongodb
+
+  frontend:
+    build: ./frontend
+    container_name: cost-estimator-frontend
+    ports:
+      - "3005:3005"
+    env_file:
+      - ./frontend/.env.local
+    depends_on:
+      - backend
+
+volumes:
+  mongo-data:

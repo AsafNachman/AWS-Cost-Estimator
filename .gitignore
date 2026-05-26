@@ -1,0 +1,54 @@
+# ==============================================================================
+# Dependency Directories
+# ==============================================================================
+backend/venv/
+backend/.venv/
+backend/env/
+backend/ENV/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# ==============================================================================
+# Environment Configuration & Private Secrets (CRITICAL)
+# ==============================================================================
+backend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+*.secrets
+*.pem
+*.key
+
+# ==============================================================================
+# Python Bytecode and Runtime Caching
+# ==============================================================================
+**/__pycache__/
+**/*.py[cod]
+**/*$py.class
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+
+# ==============================================================================
+# Local Database Assets & Managed Docker Volumes
+# ==============================================================================
+data/
+mongo-data/
+**/*.db
+**/*.sqlite
+
+# ==============================================================================
+# Application Debug Logs and OS Garbage Files
+# ==============================================================================
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.cursor/

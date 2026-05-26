@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   Base layer — typographic + surface tokens used across the whole app.
+   Keeping these as CSS variables (rather than hard-coded Tailwind colors in
+   every component) means we can flip the theme in one place if we ever add
+   a dark-mode toggle.
+   --------------------------------------------------------------------------- */
+@layer base {
+  :root {
+    --color-surface: 248 250 252;        /* slate-50  */
+    --color-surface-elev: 255 255 255;   /* white     */
+    --color-border: 226 232 240;         /* slate-200 */
+    --color-text: 15 23 42;              /* slate-900 */
+    --color-text-muted: 71 85 105;       /* slate-600 */
+  }
+
+  html,
+  body {
+    height: 100%;
+    background:
+      radial-gradient(1200px 600px at 5% -10%, rgba(99, 102, 241, 0.10), transparent 60%),
+      radial-gradient(900px 500px at 95% 0%, rgba(14, 165, 233, 0.08), transparent 55%),
+      rgb(var(--color-surface));
+    color: rgb(var(--color-text));
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: rgba(99, 102, 241, 0.25);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Component layer — reusable bits of UI surface kept here rather than
+   inlined as @apply soup at every call-site.
+   --------------------------------------------------------------------------- */
+@layer components {
+  .card {
+    @apply rounded-2xl border border-ink-200 bg-white/80 backdrop-blur-sm shadow-elev;
+  }
+
+  /* Used by the JSON editor textarea + line-number gutter so they share
+     the *exact* same line metrics — drift here causes off-by-one bugs. */
+  .code-font {
+    font-family: var(--font-mono), "JetBrains Mono", ui-monospace, SFMono-Regular,
+      Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 13px;
+    line-height: 20px;
+    tab-size: 2;
+  }
+
+  /* A custom thin scrollbar — the WebKit pseudo-elements are render-only
+     so this falls back to the OS scrollbar on Firefox without issue. */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.35);
+    border-radius: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.55);
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Utility layer — single-purpose helpers.
+   --------------------------------------------------------------------------- */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Skeleton shimmer overlay — paired with `animate-shimmer` */
+  .shimmer-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.45),
+      transparent
+    );
+    transform: translateX(-100%);
+  }
+}
