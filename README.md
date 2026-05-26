@@ -65,7 +65,7 @@ graph TD
     end
 
     subgraph Error_Reducer [State Reducer: Annotated Error Channel]
-        I & M & P & V --> Y[operator.add on errors: list[str]]
+        I & M & P & V --> Y["operator.add on errors: list of str"]
         Y --> Z[Monotonic Append-Only Audit Log]
     end
 
