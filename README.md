@@ -16,7 +16,7 @@ Built on **FastAPI** (backend) + **Next.js 15 App Router** (frontend) + **MongoD
 
 ## 🏗️ Technical Architecture
 
-The AWS Cost Estimator implements a **Pipes & Filters Architecture** with a decoupled, asynchronous LangGraph orchestration layer that transforms raw diagram payloads through isolated functional stages. The hybrid pricing engine intercepts recognized compute nodes for O(1) deterministic billing while batching ambiguous resources to structured LLM inference, ensuring that base infrastructure costs remain mathematically reproducible while intelligent estimation handles usage-driven variance.
+The AWS Cost Estimator implements a **Pipes & Filters Architecture** with a decoupled, asynchronous LangGraph orchestration layer that transforms raw diagram payloads through isolated functional stages. The entire stack is containerized via **Docker Compose multi-service orchestration**, isolating MongoDB (persistence), FastAPI (backend), and Next.js (frontend) into independently scalable containers with internal bridge networking and persistent volume mounts. The hybrid pricing engine intercepts recognized compute nodes for O(1) deterministic billing while batching ambiguous resources to structured LLM inference, ensuring that base infrastructure costs remain mathematically reproducible while intelligent estimation handles usage-driven variance.
 
 <details>
 <summary><b>🔍 Click to expand: Full Data Lifecycle Architecture Diagram</b></summary>
@@ -106,6 +106,20 @@ graph TD
 </details>
 
 **Design Philosophy:** Standard cost estimation tools rely on pure LLM inference, introducing severe floating-point drift and non-reproducible projections. AWS Cost Estimator solves this through **Matrix Grounding over LLM Hallucinations**—restricting base configurations (Aurora db.r5.2xlarge, Redshift ra3.4xlarge, ElastiCache cache.r6g.large) to absolute mathematical evaluations (`hourly_usd × 730 × count`), reserving probabilistic LLM capabilities exclusively for ambiguous usage variables (S3 data transfer, Lambda invocations, Athena query volume).
+
+---
+
+## 🧭 System Core Architecture Highlights
+
+| Engineering Pattern | Implementation Impact | Location Source |
+|:---|:---|:---|
+| **Multi-Container Docker Orchestration** | Full-stack containerization via Docker Compose isolating MongoDB, FastAPI backend, and Next.js frontend into independently scalable services with internal bridge networking and persistent volume mounts. | `docker-compose.yml` |
+| **Pipes & Filters Architecture** | Orchestrates four isolated, purely asynchronous LangGraph steps (`parse → enrich → estimate → explain`) where state transitions combine predictably through type-hinted functional channels. | `backend/app/graph.py` |
+| **Hybrid Calculation Logic** | Intercepts recognized compute nodes (Aurora, Redshift, ElastiCache, Shield Advanced) for **O(1) deterministic billing** via an internal Infracost pricing matrix, batching only usage-driven objects to the LLM layer. | `backend/app/nodes/estimator.py` |
+| **Memoized Parent Traversal** | Recursively traverses nesting structures up to root boundaries (`Leaf → Subnet → VPC → Zone → Region`). Node branches are memoized to collapse tree analysis complexity down to a linear **O(N + E)** workload. | `backend/app/nodes/parser.py` |
+| **Dual Local Hydration** | Seamlessly preserves both raw workspace text input and calculated financial dashboard response payloads within the browser's `localStorage` engine, ensuring views completely survive hard page reloads. | `frontend/src/app/page.tsx` |
+| **Durable Synchronous Writes** | Guarantees transaction history logging stability by removing loose fire-and-forget background workers, executing inline MongoDB synchronization wrapped in exponential backoff retry loops. | `backend/app/database.py` |
+| **Keyset Cursor Pagination** | Replaces slow, non-performant offset database scanning with an optimized keyset lookup boundary (`{"_id": {"$lt": ObjectId(cursor)}}`), locking down high-speed **O(log N)** history lookups regardless of row depth. | `backend/app/database.py` |
 
 ---
 
@@ -219,13 +233,13 @@ The AWS Cost Estimator pipeline is orchestrated through **LangGraph 0.2**, a sta
 
 ---
 
-## ⚡ The 5-Minute Evaluator Quick Start Track
+## ⚡ The 5-Minute Docker Quick Start Track
 
-### 0. Base Dependencies
+### 0. Prerequisites
 
-* **Python**: `3.11+` configured with an active package manager (`pip`).
-* **Node.js**: `v18.0+` utilizing the Node Package Manager (`npm`).
-* **MongoDB Community Server** *(Optional)*: Required to render the historical side-panel logs drawer interface. If unavailable, the backend boots cleanly and persistence degrades gracefully (logged no-ops).
+* **Docker Desktop**: The only system requirement. Ensure Docker Engine and Docker Compose are installed and running.
+  - Download: [https://www.docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop)
+  - Verify installation: `docker --version` and `docker compose version`
 * **LLM API Key**: A valid token for either **OpenAI** (`sk-...`) or **Anthropic** (`sk-ant-...`).
 
 ### 1. Repository Setup & Environment Configuration
@@ -237,7 +251,7 @@ cd aws-cost-estimator
 
 #### Backend Environment Configuration
 
-Create a `.env` file inside the `backend/` folder:
+Create a `.env` file inside the `backend/` folder with **container-aware MongoDB connection strings**:
 
 ```dotenv
 # ---- LLM Provider Configuration ----------------------------------------
@@ -249,14 +263,16 @@ LLM_MODEL=gpt-4o-mini
 LLM_TEMPERATURE=0.1
 LLM_TIMEOUT_SECONDS=60
 
-# ---- MongoDB Persistence Configuration ---------------------------------
-MONGODB_URL=mongodb://localhost:27017
-MONGODB_URI=mongodb://localhost:27017
+# ---- MongoDB Persistence Configuration (Docker Internal Networking) ----
+MONGODB_URL=mongodb://mongodb:27017
+MONGODB_URI=mongodb://mongodb:27017
 MONGODB_DB=aws_cost_estimator
 
 # ---- CORS Configuration ------------------------------------------------
 CORS_ALLOW_ORIGINS=http://localhost:3005,http://127.0.0.1:3005,http://localhost:3000,http://127.0.0.1:3000
 ```
+
+**🔑 Critical Configuration Note:** Use `mongodb://mongodb:27017` (not `localhost`) to ensure the FastAPI container resolves the MongoDB service via Docker Compose's internal bridge network.
 
 **Alternative: Anthropic Configuration**
 
@@ -271,61 +287,50 @@ LLM_MODEL=claude-3-5-sonnet-20241022
 Create a `.env.local` file inside the `frontend/` folder:
 
 ```dotenv
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
-NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
-### 2. Launching the Execution Layers
+**🔑 Frontend Configuration Note:** Use `http://localhost:8000` (not container names) because the browser accesses the backend from the host machine, not from inside the Docker network.
 
-#### Phase A: Booting the FastAPI Server
+### 2. Launch the Multi-Container Stack
 
-Open a new terminal session, navigate to the `backend/` directory, spin up your isolated environment, and deploy Uvicorn:
+Execute the single magic command from the project root:
 
 ```bash
-cd backend
-python -m venv venv
-
-# Activate environment (Windows PowerShell)
-.\venv\Scripts\Activate.ps1
-
-# Activate environment (macOS / Linux)
-# source venv/bin/activate
-
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+docker compose up --build
 ```
 
-**✅ Success Indicator:** The terminal logs will explicitly indicate whether your database storage layer is **ONLINE** or **OFFLINE**. Example output:
+**What happens under the hood:**
+
+1. **MongoDB Container** (`cost-estimator-db`): Spins up Mongo 7.0 with persistent volume mount (`mongo-data:/data/db`), exposed on `localhost:27017`.
+2. **Backend Container** (`cost-estimator-backend`): Builds Python 3.11 image, installs dependencies, launches Uvicorn on `0.0.0.0:8000`, connects to MongoDB via internal DNS (`mongodb:27017`).
+3. **Frontend Container** (`cost-estimator-frontend`): Builds Node 18 Alpine image, installs npm packages, starts Next.js dev server on port `3005`.
+
+**✅ Success Indicator:** Terminal output confirms all three services are healthy:
 
 ```
-INFO:     aws-cost-estimator.main: lifespan: persistence layer is ONLINE.
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+cost-estimator-db        | [initandlisten] waiting for connections on port 27017
+cost-estimator-backend   | INFO:     aws-cost-estimator.main: lifespan: persistence layer is ONLINE.
+cost-estimator-backend   | INFO:     Uvicorn running on http://0.0.0.0:8000
+cost-estimator-frontend  | ✓ Ready in 2.3s
+cost-estimator-frontend  | ○ Local:   http://localhost:3005
 ```
 
-#### Phase B: Booting the Next.js Workspace Dashboard
+### 3. Access the Live Application
 
-Open a completely separate terminal tab, navigate into the `frontend/` directory, resolve package dependencies, and force launch the development server on **isolated port 3005** to prevent systemic port collision risks:
+Once all containers are running, open your browser and navigate to:
 
-```bash
-cd frontend
-npm install
-npx next dev -p 3005
-```
+**🌐 Frontend Dashboard:** [http://localhost:3005](http://localhost:3005)
 
-**✅ Success Indicator:** Terminal confirms:
+**✅ Verify Multi-Container Connectivity:**
 
-```
-✓ Ready in 2.3s
-○ Local:   http://localhost:3005
-```
+* The upper-right network status indicator should display a green **"API Online"** seal, confirming the frontend container successfully reached the backend container over the Docker bridge network.
+* MongoDB persistence is automatically enabled—the backend logs will show `persistence layer is ONLINE`.
 
-### 3. Evaluating and Navigating the System Workspace
+### 4. Evaluating and Navigating the System Workspace
 
-1. **Launch your web browser** and open: **http://localhost:3005**
-
-2. **Confirm Backend Connectivity:** The upper-right network status indicator should display a green **"API Online"** seal. If it shows **"API Offline"**, verify that Uvicorn is running on port 8000 and `NEXT_PUBLIC_API_URL` is correctly configured.
-
-3. **Load a Pre-Compiled Example:** Click the **"Load Example"** dropdown trigger in the editor pane. The floating layout layer lets you instantly toggle between three distinctive structural deployment scenarios compiled straight from the evaluation brief:
+1. **Load a Pre-Compiled Example:** Click the **"Load Example"** dropdown trigger in the editor pane. The floating layout layer lets you instantly toggle between three distinctive structural deployment scenarios compiled straight from the evaluation brief:
 
    * **Gaming Platform – Multi-AZ Production:** High-availability enterprise array featuring a massive dual-node Redshift cluster, 3-tier provisioned Aurora reader instances, Elastic Beanstalk ASG (m6g.xlarge × 2-10), and AWS Shield Advanced global boundaries (~**$12,000+/mo** tracking).
    
@@ -333,21 +338,60 @@ npx next dev -p 3005
    
    * **Gaming Platform – Management & Deployment VPC:** Central governance environment mapping core monitoring tools (AWS Organizations, Control Tower, CloudTrail), shared IAM Identity Center, a single Golden AMI Jenkins automation box (m5.large + 100 GB gp3), and a t3.small bastion host.
 
-4. **Execute the Pipeline:** Hit **"Analyze & Estimate Cost"** to trigger the LangGraph workflow. The system will:
+2. **Execute the Pipeline:** Hit **"Analyze & Estimate Cost"** to trigger the LangGraph workflow. The backend container will:
    * Parse the diagram structure (memoized parent traversal)
    * Enrich resources with base SKU costs (parallel async lookups)
    * Estimate pricing (hybrid deterministic + LLM)
    * Explain architecture (semantic edge categorization)
+   * Persist results to the MongoDB container via internal bridge networking
 
-5. **Interact with Multi-Tier Visualization Panels:**
+3. **Interact with Multi-Tier Visualization Panels:**
 
    * **Overview Dashboard:** View metric cost distribution blocks, top-spending services, and aggregated totals.
    * **Detailed Cost Table:** Inspect line-item breakdowns with resource-level metadata, instance types, quantities, unit costs, confidence tags, and assumption tooltips.
    * **Markdown Architecture Review:** Read the collapsible structured prose analysis explaining data flow, security boundaries, and cost optimization opportunities.
 
-6. **Test State Persistence:** **Refresh your browser page** (hard reload: Ctrl+Shift+R / Cmd+Shift+R). Confirm that dual localStorage hydration is functioning—your text values in the editor and chart items in the dashboard will remain anchored to the screen.
+4. **Test Cross-Container State Persistence:** **Refresh your browser page** (hard reload: Ctrl+Shift+R / Cmd+Shift+R). Confirm that:
+   * **Client-side:** Dual localStorage hydration preserves your text values in the editor and chart items in the dashboard.
+   * **Server-side:** Click the **"History"** button in the top-right header. The drawer slides in from the right, displaying a keyset-paginated timeline of estimates persisted in the MongoDB container. Click any historical run to rehydrate its results—confirming end-to-end data flow across the container network.
 
-7. **Explore History (Optional, MongoDB Required):** Click the **"History"** button in the top-right header. If MongoDB is configured and reachable, the drawer slides in from the right, displaying a keyset-paginated timeline of saved estimates. Click any historical run to rehydrate its results.
+### 5. Container Management Commands
+
+**Stop the stack** (preserves MongoDB data in persistent volume):
+
+```bash
+docker compose down
+```
+
+**Restart the stack** (reuses existing containers):
+
+```bash
+docker compose up
+```
+
+**Rebuild and restart** (after code changes):
+
+```bash
+docker compose up --build
+```
+
+**View logs** (all services):
+
+```bash
+docker compose logs -f
+```
+
+**View logs** (single service):
+
+```bash
+docker compose logs -f backend
+```
+
+**Reset everything** (⚠️ destroys MongoDB data):
+
+```bash
+docker compose down -v
+```
 
 ---
 
@@ -356,13 +400,17 @@ npx next dev -p 3005
 ```
 aws-cost-estimator/
 ├── README.md                       ← System Operation Rulebook & Architectural Deep-Dive
+├── docker-compose.yml              ← Multi-Container Orchestration (MongoDB + Backend + Frontend)
+├── .dockerignore                   ← Docker build context exclusion patterns
 ├── examples/                       ← Original, Untouched Immutable Reviewer JSON Files
 │   ├── ai_developer_home_assignment.md
 │   ├── example_diagram_1_multi_az_prod.json
 │   ├── example_diagram_2_dev_qa.json
 │   └── example_diagram_3_mgmt_vpc.json
 │
-└── backend/                        ← Python FastAPI / LangGraph Microservice Tier
+├── backend/                        ← Python FastAPI / LangGraph Microservice Tier
+│   ├── Dockerfile                  ← Backend container image definition (Python 3.11-slim)
+│   ├── .dockerignore               ← Build context exclusions (venv, __pycache__, .env)
 │   ├── .env                        ← LLM provider, MongoDB URI, CORS configuration
 │   ├── requirements.txt            ← Python dependency manifest
 │   └── app/
@@ -378,6 +426,8 @@ aws-cost-estimator/
 │           └── explainer.py        ← Semantic Edge Categorization & Descriptive Markdown Reports
 │
 └── frontend/                       ← Next.js 15 App Router Layout Workspace
+    ├── Dockerfile                  ← Frontend container image definition (Node 18-alpine)
+    ├── .dockerignore               ← Build context exclusions (node_modules, .next, .env.local)
     ├── .env.local                  ← API base URL configuration
     ├── package.json                ← Node.js dependency manifest
     ├── src/
@@ -503,4 +553,4 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 
 ---
 
-**Contact:** Computer Science Student | AI Solutions Architect | Infrastructure Cost Intelligence Engineer
+**Contact:** Asaf Nachman - Computer Science Student (98.4 GPA) | AI Software Engineer | Former IDF Software Developer
